@@ -39,24 +39,15 @@ class FieldValidator
 
     public static function fromReflection(ReflectionProperty $property): FieldValidator
     {
-        return new self(
-            $property->getDocComment() ?: null,
-            $property->isDefault()
-        );
+        return new self($property);
     }
 
-    public function __construct(?string $docComment = null, bool $hasDefaultValue = false)
+    public function __construct(ReflectionProperty $property)
     {
-        preg_match(
-            '/@var ((?:(?:[\w?|\\\\<>])+(?:\[])?)+)/',
-            $docComment ?? '',
-            $matches
-        );
-
-        $definition = $matches[1] ?? '';
+        $definition = $this->getDefinition($property);
 
         $this->hasTypeDeclaration = $definition !== '';
-        $this->hasDefaultValue = $hasDefaultValue;
+        $this->hasDefaultValue = $property->isDefault();
         $this->isNullable = $this->resolveNullable($definition);
         $this->isMixed = $this->resolveIsMixed($definition);
         $this->isMixedArray = $this->resolveIsMixedArray($definition);
@@ -66,7 +57,7 @@ class FieldValidator
 
     public function isValidType($value): bool
     {
-        if (! $this->hasTypeDeclaration) {
+        if (!$this->hasTypeDeclaration) {
             return true;
         }
 
@@ -103,6 +94,23 @@ class FieldValidator
         return false;
     }
 
+    private function getDefinition(ReflectionProperty $property): string
+    {
+        if ($type = $property->getType()) {
+            return $type->getName();
+        }
+
+        $docComment = $property->getDocComment() ?: null;
+
+        preg_match(
+            '/@var ((?:(?:[\w?|\\\\<>])+(?:\[])?)+)/',
+            $docComment ?? '',
+            $matches
+        );
+
+        return $matches[1] ?? '';
+    }
+
     private function assertValidType(string $type, $value): bool
     {
         return $value instanceof $type || gettype($value) === $type;
@@ -111,7 +119,7 @@ class FieldValidator
     private function assertValidArrayTypes(string $type, $collection): bool
     {
         foreach ($collection as $value) {
-            if (! $this->assertValidType($type, $value)) {
+            if (!$this->assertValidType($type, $value)) {
                 return false;
             }
         }
@@ -121,7 +129,7 @@ class FieldValidator
 
     private function resolveNullable(string $definition): bool
     {
-        if (! $definition) {
+        if (!$definition) {
             return true;
         }
 
@@ -159,7 +167,7 @@ class FieldValidator
     {
         return $this->normaliseTypes(...array_map(
             function (string $type) {
-                if (! $type) {
+                if (!$type) {
                     return;
                 }
 
